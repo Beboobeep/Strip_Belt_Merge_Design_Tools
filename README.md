@@ -40,7 +40,6 @@ Where N = inner belt count. The boss mounts to the surface of the plate/channel 
 
 Each result card shows the belt/PF widths, worst oversize across all conveyors, and belt counts.
 
-Click to expand:
 - **Table** — nominal width, actual frame width, and oversize per conveyor
 - **Cross-sections** — visual layout (blue = edge, amber = inner, purple = boss, gray = plate)
 - **Stack-up formula** — with the actual values for that combo
