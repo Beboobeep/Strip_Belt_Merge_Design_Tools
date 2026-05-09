@@ -1,6 +1,6 @@
 # Link to Tool
 
-[https://beboobeep.github.io/Strip_Belt_Merge_Design_Tools/]
+https://beboobeep.github.io/Strip_Belt_Merge_Design_Tools/
 
 # Strip Belt Conveyor Optimizer
 
