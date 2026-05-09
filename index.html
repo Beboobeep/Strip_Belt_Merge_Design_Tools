@@ -30,29 +30,24 @@
     const CONVEYOR_WIDTHS = [16, 18, 22, 24, 28, 30, 37, 43, 49, 61.5];
     const MAX_BELT_WIDTH = 2.75;
 
-    // Rigid stack-up:
-    // Each pulley: [boss] [pulley face] [boss]
-    //   boss = bearing boss, mounts to surface of plate/channel, provides min clearance
-    // Frame width = 2*bossLen + 2*edgePF + N*innerPF + (N+1)*(bossLen+plate+bossLen)
-
     function computeFrameWidth(edgePF, innerPF, innerCount, bossLen, plateThick) {
       return 2 * bossLen + 2 * edgePF + (innerCount + 1) * (bossLen + plateThick + bossLen) + innerCount * innerPF;
     }
 
     function bestInnerCount(nominalWidth, edgePF, innerPF, maxBelts, bossLen, plateThick, maxDev) {
-      let best = null, bestAbsDev = Infinity;
+      let best = null, bestDev = Infinity;
       for (let N = 1; N <= maxBelts - 2; N++) {
         const fw = computeFrameWidth(edgePF, innerPF, N, bossLen, plateThick);
         const dev = fw - nominalWidth;
-        const absDev = Math.abs(dev);
-        if (absDev > maxDev) continue;
-        if (absDev < bestAbsDev) {
-          bestAbsDev = absDev;
+        if (dev < -0.0001) continue;
+        if (dev > maxDev) continue;
+        if (dev < bestDev) {
+          bestDev = dev;
           best = {
             conveyorWidth: nominalWidth, innerCount: N, totalBelts: N + 2,
             frameWidth: Math.round(fw * 10000) / 10000,
             deviation: Math.round(dev * 10000) / 10000,
-            absDeviation: Math.round(absDev * 10000) / 10000,
+            absDeviation: Math.round(dev * 10000) / 10000,
             innerGap: Math.round((bossLen + plateThick + bossLen) * 10000) / 10000,
             edgeBoss: bossLen,
           };
@@ -65,12 +60,11 @@
 
     function DeviationBadge({ deviation }) {
       const abs = Math.abs(deviation), isGreen = abs < 0.001, isYellow = abs < 0.01;
-      const sign = deviation >= 0 ? '+' : '';
       return (<span style={{
         padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace",
         background: isGreen ? 'rgba(34,197,94,0.12)' : isYellow ? 'rgba(245,158,11,0.12)' : 'rgba(139,92,246,0.12)',
         color: isGreen ? '#16a34a' : isYellow ? '#f59e0b' : '#8b5cf6',
-      }}>{isGreen ? 'exact' : `${sign}${deviation.toFixed(4)}"`}</span>);
+      }}>{isGreen ? 'exact' : `+${deviation.toFixed(4)}"`}</span>);
     }
 
     function Stat({ label, value, accent, warn }) {
@@ -90,10 +84,8 @@
       const bossW = bossLen * scale, plateW = plateThick * scale;
       const innerGapW = (bossLen + plateThick + bossLen) * scale;
 
-      // Left edge boss
       elements.push(<rect key="boss-l" x={x} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
       x += bossW;
-      // Left edge pulley + belt
       const epW = edgePF * scale, ebW = Math.max(edgeBW * scale, 1);
       elements.push(<rect key="ep-l" x={x} y={beltY-3} width={epW} height={beltH+6} rx={2} fill="rgba(59,130,246,0.25)" stroke="#3b82f6" strokeWidth={0.5} />);
       elements.push(<rect key="eb-l" x={x+beltOffset} y={beltY} width={ebW} height={beltH} rx={2} fill="#3b82f6" opacity={0.85} />);
@@ -112,17 +104,14 @@
         if (ipW > 22) elements.push(<text key={`ib-${i}-t`} x={x+ipW/2} y={beltY+beltH/2+3} textAnchor="middle" fontSize={Math.min(8,ipW*0.5)} fill="#fff" fontWeight={700}>{innerBW.toFixed(3)}"</text>);
         x += ipW;
       }
-      // Last gap
       elements.push(<rect key="gap-last" x={x} y={beltY-4} width={Math.max(innerGapW,2)} height={beltH+8} fill="rgba(71,85,105,0.2)" rx={1} />);
       elements.push(<rect key="bl-last" x={x} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
       elements.push(<rect key="plate-last" x={x+bossW} y={beltY-5} width={Math.max(plateW,1)} height={beltH+10} fill="#94a3b8" />);
       elements.push(<rect key="br-last" x={x+bossW+plateW} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
       x += innerGapW;
-      // Right edge pulley
       elements.push(<rect key="ep-r" x={x} y={beltY-3} width={epW} height={beltH+6} rx={2} fill="rgba(59,130,246,0.25)" stroke="#3b82f6" strokeWidth={0.5} />);
       elements.push(<rect key="eb-r" x={x+beltOffset} y={beltY} width={ebW} height={beltH} rx={2} fill="#3b82f6" opacity={0.85} />);
       x += epW;
-      // Right edge boss
       elements.push(<rect key="boss-r" x={x} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
 
       return (<svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width:'100%', maxWidth:700, display:'block', margin:'6px auto' }}>
@@ -205,7 +194,7 @@
 
             <div style={{ marginBottom:20, borderBottom:'2px solid var(--accent)', paddingBottom:16 }}>
               <h1 style={{ margin:0, fontSize:22, fontWeight:700, letterSpacing:-0.5, color:'var(--accent)' }}>Strip Belt Conveyor Optimizer</h1>
-              <p style={{ margin:'4px 0 0', fontSize:13, color:'var(--muted)' }}>Rigid stack-up — common belt & pulley sizes across all conveyors — actual frame widths computed</p>
+              <p style={{ margin:'4px 0 0', fontSize:13, color:'var(--muted)' }}>Rigid stack-up — common belt & pulley sizes across all conveyors — actual frame widths computed (always ≥ nominal)</p>
             </div>
 
             {/* Geometry */}
@@ -214,12 +203,12 @@
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12 }}>
                 <div>
                   <label style={labelStyle}>Bearing Boss Length (in)</label>
-                  <input type="number" step="0.001" min="0" value={bossLength} onChange={(e) => setBossLength(parseFloat(e.target.value)||0)} style={inputStyle} />
+                  <input type="number" step="0.001" min="0" value={bossLength} onChange={e=>setBossLength(parseFloat(e.target.value)||0)} style={inputStyle} />
                   <div style={{ fontSize:10, color:'var(--muted)', marginTop:3 }}>Spacer between pulley face & plate/channel — mounts to surface of the metal</div>
                 </div>
                 <div>
                   <label style={labelStyle}>Divider Plate Thickness (in)</label>
-                  <input type="number" step="0.001" min="0" value={plateThickness} onChange={(e) => setPlateThickness(parseFloat(e.target.value)||0)} style={inputStyle} />
+                  <input type="number" step="0.001" min="0" value={plateThickness} onChange={e=>setPlateThickness(parseFloat(e.target.value)||0)} style={inputStyle} />
                 </div>
                 <div>
                   <Stat label="Inner Gap: Boss+Plate+Boss (computed)" value={`${innerGap.toFixed(3)}" (${bossLength}+${plateThickness}+${bossLength})`} accent />
@@ -227,7 +216,7 @@
               </div>
               <div style={{ fontSize:11, color:'var(--muted)', marginTop:10, lineHeight:1.6 }}>
                 <strong style={{ color:'var(--text)' }}>Stack-up:</strong> Frame width = 2×boss + 2×edgePF + N×innerPF + (N+1)×(boss+plate+boss).
-                All dimensions are rigid — the frame width is computed from the stack-up, not forced to a nominal value.
+                All dimensions are rigid. Frame width is always ≥ nominal conveyor width — never smaller.
                 Belt & pulley face widths are identical across all conveyors (0.005" increments). Only belt count varies.
               </div>
             </div>
@@ -264,9 +253,9 @@
                 <input type="number" min="3" value={maxBeltsPerConveyor} onChange={e=>setMaxBeltsPerConveyor(Math.max(3,parseInt(e.target.value)||3))} style={inputStyle} />
               </div>
               <div style={cardStyle}>
-                <label style={labelStyle}>Max Frame Width Deviation (in)</label>
+                <label style={labelStyle}>Max Frame Oversize (in)</label>
                 <input type="number" step="0.005" min="0" max="2" value={maxFrameDeviation} onChange={e=>setMaxFrameDeviation(parseFloat(e.target.value)||0)} style={inputStyle} />
-                <div style={{ fontSize:10, color:'var(--muted)', marginTop:4 }}>How far actual frame width can deviate from nominal conveyor width</div>
+                <div style={{ fontSize:10, color:'var(--muted)', marginTop:4 }}>Frame is always ≥ nominal — this controls how much wider is acceptable</div>
               </div>
             </div>
 
@@ -290,11 +279,11 @@
               {optimizedResults.length} combo{optimizedResults.length!==1?'s':''} found
               {optimizedResults.length>=100?' (showing top 100)':''} across {activeWidths.length} conveyor{activeWidths.length!==1?'s':''}
               &nbsp;&nbsp;|&nbsp;&nbsp;{uniformBelts?'All belts same width':'Edge belt < inner belt'}
-              &nbsp;&nbsp;|&nbsp;&nbsp;Sorted by smallest frame width deviation
+              &nbsp;&nbsp;|&nbsp;&nbsp;Frame always ≥ nominal &nbsp;|&nbsp; Sorted by smallest oversize
             </div>
 
             {activeWidths.length===0 && <div style={{ padding:32, textAlign:'center', color:'var(--muted)', ...cardStyle }}>Select at least one conveyor width.</div>}
-            {activeWidths.length>0 && optimizedResults.length===0 && <div style={{ padding:32, textAlign:'center', color:'var(--muted)', ...cardStyle }}>No combos found. Try increasing max frame width deviation, lowering min belt width, or increasing max belts per conveyor.</div>}
+            {activeWidths.length>0 && optimizedResults.length===0 && <div style={{ padding:32, textAlign:'center', color:'var(--muted)', ...cardStyle }}>No combos found. Try increasing max frame oversize, lowering min belt width, or increasing max belts per conveyor.</div>}
 
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
               {optimizedResults.map((match, mi) => {
@@ -330,7 +319,7 @@
                           background: match.worstAbsDeviation<0.001?'rgba(34,197,94,0.12)':match.worstAbsDeviation<0.01?'rgba(245,158,11,0.12)':'rgba(139,92,246,0.12)',
                           color: match.worstAbsDeviation<0.001?'var(--success)':match.worstAbsDeviation<0.01?'var(--accent)':'var(--highlight)',
                           border: `1px solid ${match.worstAbsDeviation<0.001?'rgba(34,197,94,0.3)':match.worstAbsDeviation<0.01?'rgba(245,158,11,0.3)':'rgba(139,92,246,0.3)'}`,
-                        }}>{match.worstAbsDeviation<0.0001?'Exact fit':`Worst frame dev: ±${match.worstAbsDeviation.toFixed(4)}"`}</span>
+                        }}>{match.worstAbsDeviation<0.0001?'Exact fit':`Worst oversize: +${match.worstAbsDeviation.toFixed(4)}"`}</span>
                         <span style={{ fontSize:18, color:'var(--muted)', userSelect:'none' }}>{isExpanded?'▾':'▸'}</span>
                       </div>
                     </div>
@@ -345,7 +334,7 @@
                         <Stat label="Inner Belt" value={`${match.innerBW.toFixed(3)}"`} />
                         <Stat label="Inner Pulley Face" value={`${match.innerPF.toFixed(3)}"`} />
                       </>)}
-                      <Stat label="Worst Frame Dev" value={match.worstAbsDeviation<0.0001?'Exact':`±${match.worstAbsDeviation.toFixed(4)}"`} accent={match.worstAbsDeviation<0.001} />
+                      <Stat label="Worst Oversize" value={match.worstAbsDeviation<0.0001?'Exact':`+${match.worstAbsDeviation.toFixed(4)}"`} accent={match.worstAbsDeviation<0.001} />
                       <Stat label="Belt Counts" value={match.assignment.map(a=>a.totalBelts).join(', ')} />
                     </div>
 
@@ -354,7 +343,7 @@
                         <div style={{ overflowX:'auto' }}>
                           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, fontFamily:"'IBM Plex Mono', monospace" }}>
                             <thead><tr style={{ borderBottom:'1px solid var(--border)' }}>
-                              {['Nominal','Belts','Inner','Actual Frame Width','Deviation'].map(h=>
+                              {['Nominal','Belts','Inner','Actual Frame Width','Oversize'].map(h=>
                                 <th key={h} style={{ padding:'6px 8px', textAlign:'left', fontSize:10, fontWeight:600, textTransform:'uppercase', letterSpacing:0.5, color:'var(--muted)', whiteSpace:'nowrap' }}>{h}</th>
                               )}
                             </tr></thead>
@@ -377,7 +366,7 @@
                           {match.assignment.map((a,ai)=>
                             <div key={ai} style={{ marginBottom:4 }}>
                               <div style={{ fontSize:10, color:'var(--muted)', textAlign:'center', marginBottom:-2 }}>
-                                Nominal {a.conveyorWidth}" → Actual {a.frameWidth.toFixed(4)}" ({a.deviation>=0?'+':''}{a.deviation.toFixed(4)}") — {a.totalBelts} belts
+                                Nominal {a.conveyorWidth}" → Actual {a.frameWidth.toFixed(4)}" (+{a.deviation.toFixed(4)}") — {a.totalBelts} belts
                               </div>
                               <ConveyorDiagram edgePF={match.edgePF} innerPF={match.innerPF}
                                 innerCount={a.innerCount} frameWidth={a.frameWidth}
@@ -388,8 +377,8 @@
 
                         <div style={{ marginTop:10, padding:10, background:'var(--surface2)', borderRadius:6, fontSize:11, color:'var(--muted)', lineHeight:1.5 }}>
                           <strong style={{ color:'var(--text)' }}>Rigid stack-up:</strong> Frame width = 2×{bossLength}" boss + 2×{match.edgePF.toFixed(3)}" edgePF + N×{match.innerPF.toFixed(3)}" innerPF + (N+1)×{innerGap.toFixed(3)}" gap.
-                          Nothing flexes. The "Deviation" column shows how the actual built width compares to the nominal conveyor width.
-                          Positive = frame is wider than nominal. Negative = frame is narrower.
+                          Nothing flexes. The "Oversize" column shows how much wider the actual frame is than nominal.
+                          Frame is never smaller than nominal — only equal or wider.
                         </div>
                       </div>
                     )}
