@@ -7,16 +7,10 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body {
-      margin: 0; padding: 0;
-      font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
-      background: #0f1117; color: #e2e8f0;
-      --bg: #0f1117; --surface: #1a1d27; --surface2: #232735;
-      --border: #2d3348; --text: #e2e8f0; --muted: #94a3b8;
-      --accent: #f59e0b; --accent2: #3b82f6; --danger: #ef4444;
-      --success: #22c55e; --highlight: #8b5cf6;
-    }
-    #root { min-height: 100vh; }
+    body { margin:0; padding:0; font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif; background:#0f1117; color:#e2e8f0;
+      --bg:#0f1117; --surface:#1a1d27; --surface2:#232735; --border:#2d3348; --text:#e2e8f0; --muted:#94a3b8;
+      --accent:#f59e0b; --accent2:#3b82f6; --danger:#ef4444; --success:#22c55e; --highlight:#8b5cf6; }
+    #root { min-height:100vh; }
   </style>
 </head>
 <body>
@@ -26,31 +20,25 @@
   <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel">
     const { useState, useMemo } = React;
-
     const CONVEYOR_WIDTHS = [16, 18, 22, 24, 28, 30, 37, 43, 49, 61.5];
-    const MAX_BELT_WIDTH = 2.75;
+    
 
-    function computeFrameWidth(edgePF, innerPF, innerCount, bossLen, plateThick) {
-      return 2 * bossLen + 2 * edgePF + (innerCount + 1) * (bossLen + plateThick + bossLen) + innerCount * innerPF;
+    function computeFrameWidth(edgePF, innerPF, innerCount, bossLen, innerSpacing) {
+      return 2 * bossLen + 2 * edgePF + innerCount * innerPF + (innerCount + 1) * innerSpacing;
     }
 
-    function bestInnerCount(nominalWidth, edgePF, innerPF, maxBelts, bossLen, plateThick, maxDev) {
+    function bestInnerCount(nominalWidth, edgePF, innerPF, maxBelts, bossLen, innerSpacing, maxDev) {
       let best = null, bestDev = Infinity;
       for (let N = 1; N <= maxBelts - 2; N++) {
-        const fw = computeFrameWidth(edgePF, innerPF, N, bossLen, plateThick);
+        const fw = computeFrameWidth(edgePF, innerPF, N, bossLen, innerSpacing);
         const dev = fw - nominalWidth;
         if (dev < -0.0001) continue;
         if (dev > maxDev) continue;
         if (dev < bestDev) {
           bestDev = dev;
-          best = {
-            conveyorWidth: nominalWidth, innerCount: N, totalBelts: N + 2,
-            frameWidth: Math.round(fw * 10000) / 10000,
-            deviation: Math.round(dev * 10000) / 10000,
-            absDeviation: Math.round(dev * 10000) / 10000,
-            innerGap: Math.round((bossLen + plateThick + bossLen) * 10000) / 10000,
-            edgeBoss: bossLen,
-          };
+          best = { conveyorWidth: nominalWidth, innerCount: N, totalBelts: N + 2,
+            frameWidth: Math.round(fw * 10000) / 10000, deviation: Math.round(dev * 10000) / 10000,
+            absDeviation: Math.round(dev * 10000) / 10000 };
         }
       }
       return best;
@@ -60,138 +48,108 @@
 
     function DeviationBadge({ deviation }) {
       const abs = Math.abs(deviation), isGreen = abs < 0.001, isYellow = abs < 0.01;
-      return (<span style={{
-        padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace",
-        background: isGreen ? 'rgba(34,197,94,0.12)' : isYellow ? 'rgba(245,158,11,0.12)' : 'rgba(139,92,246,0.12)',
-        color: isGreen ? '#16a34a' : isYellow ? '#f59e0b' : '#8b5cf6',
+      return (<span style={{ padding:'1px 6px', borderRadius:3, fontSize:10, fontWeight:600, fontFamily:"'IBM Plex Mono', monospace",
+        background: isGreen?'rgba(34,197,94,0.12)':isYellow?'rgba(245,158,11,0.12)':'rgba(139,92,246,0.12)',
+        color: isGreen?'#16a34a':isYellow?'#f59e0b':'#8b5cf6',
       }}>{isGreen ? 'exact' : `+${deviation.toFixed(4)}"`}</span>);
     }
 
     function Stat({ label, value, accent, warn }) {
-      return (<div style={{ background: 'var(--surface2)', borderRadius: 5, padding: '6px 10px' }}>
-        <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: warn ? 'var(--danger)' : accent ? 'var(--success)' : 'var(--text)' }}>{value}</div>
+      return (<div style={{ background:'var(--surface2)', borderRadius:5, padding:'6px 10px' }}>
+        <div style={{ fontSize:10, color:'var(--muted)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:2 }}>{label}</div>
+        <div style={{ fontSize:14, fontWeight:600, color: warn?'var(--danger)':accent?'var(--success)':'var(--text)' }}>{value}</div>
       </div>);
     }
 
-    function ConveyorDiagram({ edgePF, innerPF, innerCount, frameWidth, pulleyDiff, bossLen, plateThick }) {
-      const svgW = 640, svgH = 95, margin = 14, drawW = svgW - 2 * margin;
-      const scale = drawW / frameWidth, beltY = 26, beltH = 32;
-      const elements = [];
-      let x = margin;
-      const edgeBW = r5(edgePF - pulleyDiff), innerBW = r5(innerPF - pulleyDiff);
-      const beltOffset = (pulleyDiff / 2) * scale;
-      const bossW = bossLen * scale, plateW = plateThick * scale;
-      const innerGapW = (bossLen + plateThick + bossLen) * scale;
-
+    function ConveyorDiagram({ edgePF, innerPF, innerCount, frameWidth, pulleyDiff, bossLen, innerSpacing }) {
+      const svgW=640, svgH=95, margin=14, drawW=svgW-2*margin;
+      const scale=drawW/frameWidth, beltY=26, beltH=32;
+      const elements=[]; let x=margin;
+      const edgeBW=r5(edgePF-pulleyDiff), innerBW=r5(innerPF-pulleyDiff);
+      const beltOffset=(pulleyDiff/2)*scale, bossW=bossLen*scale, innerSpW=innerSpacing*scale;
+      // Left boss
       elements.push(<rect key="boss-l" x={x} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
-      x += bossW;
-      const epW = edgePF * scale, ebW = Math.max(edgeBW * scale, 1);
+      x+=bossW;
+      // Left edge pulley
+      const epW=edgePF*scale, ebW=Math.max(edgeBW*scale,1);
       elements.push(<rect key="ep-l" x={x} y={beltY-3} width={epW} height={beltH+6} rx={2} fill="rgba(59,130,246,0.25)" stroke="#3b82f6" strokeWidth={0.5} />);
       elements.push(<rect key="eb-l" x={x+beltOffset} y={beltY} width={ebW} height={beltH} rx={2} fill="#3b82f6" opacity={0.85} />);
-      if (epW > 22) elements.push(<text key="eb-l-t" x={x+epW/2} y={beltY+beltH/2+3} textAnchor="middle" fontSize={Math.min(8,epW*0.5)} fill="#fff" fontWeight={700}>{edgeBW.toFixed(3)}"</text>);
-      x += epW;
-
-      for (let i = 0; i < innerCount; i++) {
-        elements.push(<rect key={`gap-${i}`} x={x} y={beltY-4} width={Math.max(innerGapW,2)} height={beltH+8} fill="rgba(71,85,105,0.2)" rx={1} />);
-        elements.push(<rect key={`bl-${i}`} x={x} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
-        elements.push(<rect key={`plate-${i}`} x={x+bossW} y={beltY-5} width={Math.max(plateW,1)} height={beltH+10} fill="#94a3b8" />);
-        elements.push(<rect key={`br-${i}`} x={x+bossW+plateW} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
-        x += innerGapW;
-        const ipW = innerPF * scale;
+      if(epW>22) elements.push(<text key="eb-l-t" x={x+epW/2} y={beltY+beltH/2+3} textAnchor="middle" fontSize={Math.min(8,epW*0.5)} fill="#fff" fontWeight={700}>{edgeBW.toFixed(3)}"</text>);
+      x+=epW;
+      for(let i=0;i<innerCount;i++){
+        elements.push(<rect key={`sp-${i}`} x={x} y={beltY-5} width={Math.max(innerSpW,1.5)} height={beltH+10} fill="#94a3b8" opacity={0.7} />);
+        x+=innerSpW;
+        const ipW=innerPF*scale;
         elements.push(<rect key={`ip-${i}`} x={x} y={beltY-3} width={ipW} height={beltH+6} rx={2} fill="rgba(245,158,11,0.2)" stroke="#f59e0b" strokeWidth={0.5} />);
         elements.push(<rect key={`ib-${i}`} x={x+beltOffset} y={beltY} width={Math.max(innerBW*scale,1)} height={beltH} rx={2} fill="#f59e0b" opacity={0.85} />);
-        if (ipW > 22) elements.push(<text key={`ib-${i}-t`} x={x+ipW/2} y={beltY+beltH/2+3} textAnchor="middle" fontSize={Math.min(8,ipW*0.5)} fill="#fff" fontWeight={700}>{innerBW.toFixed(3)}"</text>);
-        x += ipW;
+        if(ipW>22) elements.push(<text key={`ib-${i}-t`} x={x+ipW/2} y={beltY+beltH/2+3} textAnchor="middle" fontSize={Math.min(8,ipW*0.5)} fill="#fff" fontWeight={700}>{innerBW.toFixed(3)}"</text>);
+        x+=ipW;
       }
-      elements.push(<rect key="gap-last" x={x} y={beltY-4} width={Math.max(innerGapW,2)} height={beltH+8} fill="rgba(71,85,105,0.2)" rx={1} />);
-      elements.push(<rect key="bl-last" x={x} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
-      elements.push(<rect key="plate-last" x={x+bossW} y={beltY-5} width={Math.max(plateW,1)} height={beltH+10} fill="#94a3b8" />);
-      elements.push(<rect key="br-last" x={x+bossW+plateW} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
-      x += innerGapW;
+      elements.push(<rect key="sp-last" x={x} y={beltY-5} width={Math.max(innerSpW,1.5)} height={beltH+10} fill="#94a3b8" opacity={0.7} />);
+      x+=innerSpW;
       elements.push(<rect key="ep-r" x={x} y={beltY-3} width={epW} height={beltH+6} rx={2} fill="rgba(59,130,246,0.25)" stroke="#3b82f6" strokeWidth={0.5} />);
       elements.push(<rect key="eb-r" x={x+beltOffset} y={beltY} width={ebW} height={beltH} rx={2} fill="#3b82f6" opacity={0.85} />);
-      x += epW;
+      x+=epW;
       elements.push(<rect key="boss-r" x={x} y={beltY-1} width={Math.max(bossW,1)} height={beltH+2} fill="rgba(168,85,247,0.3)" rx={1} />);
-
       return (<svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width:'100%', maxWidth:700, display:'block', margin:'6px auto' }}>
-        <rect x={margin} y={beltY-7} width={drawW} height={beltH+14} rx={3} fill="none" stroke="var(--border)" strokeWidth={1.5} />
-        {elements}
+        <rect x={margin} y={beltY-7} width={drawW} height={beltH+14} rx={3} fill="none" stroke="var(--border)" strokeWidth={1.5} />{elements}
       </svg>);
     }
 
-    const inputStyle = {
-      width:'100%', padding:'8px 10px', borderRadius:5, border:'1px solid var(--border)',
-      background:'var(--surface2)', color:'var(--text)', fontSize:14,
-      fontFamily:"'IBM Plex Mono', monospace", boxSizing:'border-box',
-    };
-    const labelStyle = {
-      fontSize:11, fontWeight:600, textTransform:'uppercase', letterSpacing:1,
-      color:'var(--muted)', display:'block', marginBottom:8,
-    };
-    const cardStyle = {
-      background:'var(--surface)', borderRadius:8, padding:16, border:'1px solid var(--border)',
-    };
+    const inputStyle={ width:'100%', padding:'8px 10px', borderRadius:5, border:'1px solid var(--border)',
+      background:'var(--surface2)', color:'var(--text)', fontSize:14, fontFamily:"'IBM Plex Mono', monospace", boxSizing:'border-box' };
+    const labelStyle={ fontSize:11, fontWeight:600, textTransform:'uppercase', letterSpacing:1, color:'var(--muted)', display:'block', marginBottom:8 };
+    const cardStyle={ background:'var(--surface)', borderRadius:8, padding:16, border:'1px solid var(--border)' };
 
     function App() {
-      const [selectedWidths, setSelectedWidths] = useState(CONVEYOR_WIDTHS.map(() => true));
+      const [selectedWidths, setSelectedWidths] = useState(CONVEYOR_WIDTHS.map(()=>true));
       const [pulleyDiff, setPulleyDiff] = useState(0.25);
       const [minBeltWidth, setMinBeltWidth] = useState(0.75);
+      const [maxBeltWidth, setMaxBeltWidth] = useState(2.75);
       const [maxBeltsPerConveyor, setMaxBeltsPerConveyor] = useState(40);
       const [maxFrameDeviation, setMaxFrameDeviation] = useState(0.100);
       const [uniformBelts, setUniformBelts] = useState(false);
       const [expandedMatch, setExpandedMatch] = useState(0);
       const [bossLength, setBossLength] = useState(0.125);
-      const [plateThickness, setPlateThickness] = useState(0.105);
+      const [innerSpacing, setInnerSpacing] = useState(0.105);
 
-      const innerGap = bossLength + plateThickness + bossLength;
-      const activeWidths = CONVEYOR_WIDTHS.filter((_, i) => selectedWidths[i]);
+      const activeWidths = CONVEYOR_WIDTHS.filter((_,i)=>selectedWidths[i]);
 
-      const optimizedResults = useMemo(() => {
-        if (activeWidths.length === 0) return [];
-        const results = [], step = 0.005, seen = new Set();
-        const minPF = r5(minBeltWidth + pulleyDiff), maxPF = r5(MAX_BELT_WIDTH + pulleyDiff);
-
-        for (let edgePF = minPF; edgePF <= maxPF; edgePF = r5(edgePF + step)) {
-          const edgeBW = r5(edgePF - pulleyDiff);
-          if (edgeBW < minBeltWidth || edgeBW > MAX_BELT_WIDTH) continue;
-          const innerPFs = uniformBelts ? [edgePF] : [];
-          if (!uniformBelts) { for (let ipf = r5(edgePF+step); ipf <= maxPF; ipf = r5(ipf+step)) innerPFs.push(ipf); }
-
-          for (const innerPF of innerPFs) {
-            const innerBW = r5(innerPF - pulleyDiff);
-            if (innerBW < minBeltWidth || innerBW > MAX_BELT_WIDTH) continue;
-            if (!uniformBelts && innerBW <= edgeBW) continue;
-            let allFit = true, worstAbsDev = 0;
-            const assignment = [];
-            for (const cw of activeWidths) {
-              const layout = bestInnerCount(cw, edgePF, innerPF, maxBeltsPerConveyor, bossLength, plateThickness, maxFrameDeviation);
-              if (!layout) { allFit = false; break; }
-              worstAbsDev = Math.max(worstAbsDev, layout.absDeviation);
+      const optimizedResults = useMemo(()=>{
+        if(activeWidths.length===0) return [];
+        const results=[], step=0.005, seen=new Set();
+        const minPF=r5(minBeltWidth+pulleyDiff), maxPF=r5(maxBeltWidth+pulleyDiff);
+        for(let edgePF=minPF; edgePF<=maxPF; edgePF=r5(edgePF+step)){
+          const edgeBW=r5(edgePF-pulleyDiff);
+          if(edgeBW<minBeltWidth||edgeBW>maxBeltWidth) continue;
+          const innerPFs=uniformBelts?[edgePF]:[];
+          if(!uniformBelts){for(let ipf=r5(edgePF+step);ipf<=maxPF;ipf=r5(ipf+step)) innerPFs.push(ipf);}
+          for(const innerPF of innerPFs){
+            const innerBW=r5(innerPF-pulleyDiff);
+            if(innerBW<minBeltWidth||innerBW>maxBeltWidth) continue;
+            if(!uniformBelts&&innerBW<=edgeBW) continue;
+            let allFit=true, worstAbsDev=0; const assignment=[];
+            for(const cw of activeWidths){
+              const layout=bestInnerCount(cw,edgePF,innerPF,maxBeltsPerConveyor,bossLength,innerSpacing,maxFrameDeviation);
+              if(!layout){allFit=false;break;}
+              worstAbsDev=Math.max(worstAbsDev,layout.absDeviation);
               assignment.push(layout);
             }
-            if (!allFit) continue;
-            const key = `${edgePF.toFixed(3)}_${innerPF.toFixed(3)}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            results.push({ key, edgePF, edgeBW, innerPF, innerBW,
-              worstAbsDeviation: Math.round(worstAbsDev * 10000) / 10000, assignment });
+            if(!allFit) continue;
+            const key=`${edgePF.toFixed(3)}_${innerPF.toFixed(3)}`;
+            if(seen.has(key)) continue; seen.add(key);
+            results.push({key,edgePF,edgeBW,innerPF,innerBW,worstAbsDeviation:Math.round(worstAbsDev*10000)/10000,assignment});
           }
         }
-        results.sort((a, b) => {
-          const d = a.worstAbsDeviation - b.worstAbsDeviation;
-          if (Math.abs(d) > 0.00005) return d;
-          return b.innerBW - a.innerBW;
-        });
-        return results.slice(0, 100);
-      }, [activeWidths, pulleyDiff, minBeltWidth, maxBeltsPerConveyor, maxFrameDeviation, uniformBelts, bossLength, plateThickness]);
+        results.sort((a,b)=>{const d=a.worstAbsDeviation-b.worstAbsDeviation;if(Math.abs(d)>0.00005)return d;return b.innerBW-a.innerBW;});
+        return results.slice(0,100);
+      },[activeWidths,pulleyDiff,minBeltWidth,maxBeltWidth,maxBeltsPerConveyor,maxFrameDeviation,uniformBelts,bossLength,innerSpacing]);
 
-      const toggleWidth = (i) => { const n = [...selectedWidths]; n[i] = !n[i]; setSelectedWidths(n); };
+      const toggleWidth=(i)=>{const n=[...selectedWidths];n[i]=!n[i];setSelectedWidths(n);};
 
       return (
         <div style={{ padding:'24px 12px', minHeight:'100vh' }}>
           <div style={{ maxWidth:1050, margin:'0 auto' }}>
-
             <div style={{ marginBottom:20, borderBottom:'2px solid var(--accent)', paddingBottom:16 }}>
               <h1 style={{ margin:0, fontSize:22, fontWeight:700, letterSpacing:-0.5, color:'var(--accent)' }}>Strip Belt Conveyor Optimizer</h1>
               <p style={{ margin:'4px 0 0', fontSize:13, color:'var(--muted)' }}>Rigid stack-up — common belt & pulley sizes across all conveyors — actual frame widths computed (always ≥ nominal)</p>
@@ -202,21 +160,19 @@
               <div style={{ fontSize:11, fontWeight:600, textTransform:'uppercase', letterSpacing:1, color:'var(--accent2)', marginBottom:10 }}>Pulley & Frame Geometry</div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:12 }}>
                 <div>
-                  <label style={labelStyle}>Bearing Boss Length (in)</label>
+                  <label style={labelStyle}>Edge Boss Length (in)</label>
                   <input type="number" step="0.001" min="0" value={bossLength} onChange={e=>setBossLength(parseFloat(e.target.value)||0)} style={inputStyle} />
-                  <div style={{ fontSize:10, color:'var(--muted)', marginTop:3 }}>Spacer between pulley face & plate/channel — mounts to surface of the metal</div>
+                  <div style={{ fontSize:10, color:'var(--muted)', marginTop:3 }}>Spacing from edge pulley face to side channel — boss mounts to channel surface</div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Divider Plate Thickness (in)</label>
-                  <input type="number" step="0.001" min="0" value={plateThickness} onChange={e=>setPlateThickness(parseFloat(e.target.value)||0)} style={inputStyle} />
-                </div>
-                <div>
-                  <Stat label="Inner Gap: Boss+Plate+Boss (computed)" value={`${innerGap.toFixed(3)}" (${bossLength}+${plateThickness}+${bossLength})`} accent />
+                  <label style={labelStyle}>Inner Pulley Spacing (in)</label>
+                  <input type="number" step="0.001" min="0" value={innerSpacing} onChange={e=>setInnerSpacing(parseFloat(e.target.value)||0)} style={inputStyle} />
+                  <div style={{ fontSize:10, color:'var(--muted)', marginTop:3 }}>Distance between adjacent inner pulley faces (e.g. plate thickness if faces are flush to plate)</div>
                 </div>
               </div>
               <div style={{ fontSize:11, color:'var(--muted)', marginTop:10, lineHeight:1.6 }}>
-                <strong style={{ color:'var(--text)' }}>Stack-up:</strong> Frame width = 2×boss + 2×edgePF + N×innerPF + (N+1)×(boss+plate+boss).
-                All dimensions are rigid. Frame width is always ≥ nominal conveyor width — never smaller.
+                <strong style={{ color:'var(--text)' }}>Stack-up:</strong> Frame width = 2×boss + 2×edgePF + N×innerPF + (N+1)×innerSpacing.
+                Edge boss and inner spacing are independent. Frame is always ≥ nominal conveyor width.
                 Belt & pulley face widths are identical across all conveyors (0.005" increments). Only belt count varies.
               </div>
             </div>
@@ -228,13 +184,10 @@
                 <div style={{ display:'flex', gap:6 }}>
                   {[{id:false,label:'Edge + Inner'},{id:true,label:'Uniform'}].map(m=>
                     <button key={String(m.id)} onClick={()=>{setUniformBelts(m.id);setExpandedMatch(0);}} style={{
-                      flex:1, padding:'8px 0', borderRadius:5,
-                      border:`1px solid ${uniformBelts===m.id?'var(--accent)':'var(--border)'}`,
+                      flex:1,padding:'8px 0',borderRadius:5,border:`1px solid ${uniformBelts===m.id?'var(--accent)':'var(--border)'}`,
                       background:uniformBelts===m.id?'rgba(245,158,11,0.15)':'var(--surface2)',
-                      color:uniformBelts===m.id?'var(--accent)':'var(--muted)',
-                      fontWeight:600, fontSize:13, cursor:'pointer',
-                    }}>{m.label}</button>
-                  )}
+                      color:uniformBelts===m.id?'var(--accent)':'var(--muted)',fontWeight:600,fontSize:13,cursor:'pointer',
+                    }}>{m.label}</button>)}
                 </div>
                 <div style={{ fontSize:10, color:'var(--muted)', marginTop:4 }}>{uniformBelts?'All belts same width':'Edge belts smaller than inner'}</div>
               </div>
@@ -245,8 +198,11 @@
               </div>
               <div style={cardStyle}>
                 <label style={labelStyle}>Min Belt Width (in)</label>
-                <input type="number" step="0.005" min="0.1" max={MAX_BELT_WIDTH} value={minBeltWidth} onChange={e=>setMinBeltWidth(parseFloat(e.target.value)||0.1)} style={inputStyle} />
-                <div style={{ fontSize:10, color:'var(--muted)', marginTop:4 }}>Max: {MAX_BELT_WIDTH}"</div>
+                <input type="number" step="0.005" min="0.1" max={maxBeltWidth} value={minBeltWidth} onChange={e=>setMinBeltWidth(parseFloat(e.target.value)||0.1)} style={inputStyle} />
+              </div>
+              <div style={cardStyle}>
+                <label style={labelStyle}>Max Belt Width (in)</label>
+                <input type="number" step="0.005" min={minBeltWidth} value={maxBeltWidth} onChange={e=>setMaxBeltWidth(parseFloat(e.target.value)||0.5)} style={inputStyle} />
               </div>
               <div style={cardStyle}>
                 <label style={labelStyle}>Max Belts Per Conveyor</label>
@@ -265,13 +221,12 @@
               <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
                 {CONVEYOR_WIDTHS.map((w,i)=>
                   <button key={w} onClick={()=>toggleWidth(i)} style={{
-                    padding:'6px 14px', borderRadius:5, border:'1px solid',
+                    padding:'6px 14px',borderRadius:5,border:'1px solid',
                     borderColor:selectedWidths[i]?'var(--accent)':'var(--border)',
                     background:selectedWidths[i]?'rgba(245,158,11,0.15)':'var(--surface2)',
                     color:selectedWidths[i]?'var(--accent)':'var(--muted)',
-                    fontWeight:600, fontSize:13, cursor:'pointer', fontFamily:"'IBM Plex Mono', monospace",
-                  }}>{w}"</button>
-                )}
+                    fontWeight:600,fontSize:13,cursor:'pointer',fontFamily:"'IBM Plex Mono', monospace",
+                  }}>{w}"</button>)}
               </div>
             </div>
 
@@ -282,53 +237,52 @@
               &nbsp;&nbsp;|&nbsp;&nbsp;Frame always ≥ nominal &nbsp;|&nbsp; Sorted by smallest oversize
             </div>
 
-            {activeWidths.length===0 && <div style={{ padding:32, textAlign:'center', color:'var(--muted)', ...cardStyle }}>Select at least one conveyor width.</div>}
-            {activeWidths.length>0 && optimizedResults.length===0 && <div style={{ padding:32, textAlign:'center', color:'var(--muted)', ...cardStyle }}>No combos found. Try increasing max frame oversize, lowering min belt width, or increasing max belts per conveyor.</div>}
+            {activeWidths.length===0&&<div style={{padding:32,textAlign:'center',color:'var(--muted)',...cardStyle}}>Select at least one conveyor width.</div>}
+            {activeWidths.length>0&&optimizedResults.length===0&&<div style={{padding:32,textAlign:'center',color:'var(--muted)',...cardStyle}}>No combos found. Try increasing max frame oversize, lowering min belt width, or increasing max belts per conveyor.</div>}
 
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              {optimizedResults.map((match, mi) => {
-                const isExpanded = expandedMatch === mi;
+              {optimizedResults.map((match,mi)=>{
+                const isExpanded=expandedMatch===mi;
                 return (
-                  <div key={mi} style={{
-                    ...cardStyle,
-                    borderColor: mi===0?'var(--success)':isExpanded?'var(--highlight)':'var(--border)',
-                    background: mi===0?'rgba(34,197,94,0.04)':'var(--surface)', cursor:'pointer',
+                  <div key={mi} style={{ ...cardStyle,
+                    borderColor:mi===0?'var(--success)':isExpanded?'var(--highlight)':'var(--border)',
+                    background:mi===0?'rgba(34,197,94,0.04)':'var(--surface)',cursor:'pointer',
                   }} onClick={()=>setExpandedMatch(mi)}>
 
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-                        {mi===0 && <span style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, padding:'3px 8px', borderRadius:4, background:'var(--success)', color:'#0f1117' }}>Best</span>}
-                        {uniformBelts ? (
-                          <span style={{ fontSize:17, fontWeight:700, fontFamily:"'IBM Plex Mono', monospace" }}>
-                            <span style={{ color:'var(--accent)' }}>{match.edgeBW.toFixed(3)}"</span>
-                            <span style={{ color:'var(--muted)', fontSize:12, fontWeight:500 }}> uniform belt</span>
+                        {mi===0&&<span style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:1,padding:'3px 8px',borderRadius:4,background:'var(--success)',color:'#0f1117'}}>Best</span>}
+                        {uniformBelts?(
+                          <span style={{fontSize:17,fontWeight:700,fontFamily:"'IBM Plex Mono', monospace"}}>
+                            <span style={{color:'var(--accent)'}}>{match.edgeBW.toFixed(3)}"</span>
+                            <span style={{color:'var(--muted)',fontSize:12,fontWeight:500}}> uniform belt</span>
                           </span>
-                        ) : (
-                          <span style={{ fontSize:17, fontWeight:700, fontFamily:"'IBM Plex Mono', monospace" }}>
-                            <span style={{ color:'var(--accent2)' }}>{match.edgeBW.toFixed(3)}"</span>
-                            <span style={{ color:'var(--muted)', fontSize:12, fontWeight:500 }}> edge </span>
-                            <span style={{ color:'var(--muted)', fontSize:14 }}>+</span>
-                            <span style={{ color:'var(--highlight)', marginLeft:4 }}>{match.innerBW.toFixed(3)}"</span>
-                            <span style={{ color:'var(--muted)', fontSize:12, fontWeight:500 }}> inner</span>
+                        ):(
+                          <span style={{fontSize:17,fontWeight:700,fontFamily:"'IBM Plex Mono', monospace"}}>
+                            <span style={{color:'var(--accent2)'}}>{match.edgeBW.toFixed(3)}"</span>
+                            <span style={{color:'var(--muted)',fontSize:12,fontWeight:500}}> edge </span>
+                            <span style={{color:'var(--muted)',fontSize:14}}>+</span>
+                            <span style={{color:'var(--highlight)',marginLeft:4}}>{match.innerBW.toFixed(3)}"</span>
+                            <span style={{color:'var(--muted)',fontSize:12,fontWeight:500}}> inner</span>
                           </span>
                         )}
                       </div>
                       <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
                         <span style={{
-                          padding:'2px 10px', borderRadius:4, fontSize:11, fontWeight:600,
-                          background: match.worstAbsDeviation<0.001?'rgba(34,197,94,0.12)':match.worstAbsDeviation<0.01?'rgba(245,158,11,0.12)':'rgba(139,92,246,0.12)',
-                          color: match.worstAbsDeviation<0.001?'var(--success)':match.worstAbsDeviation<0.01?'var(--accent)':'var(--highlight)',
-                          border: `1px solid ${match.worstAbsDeviation<0.001?'rgba(34,197,94,0.3)':match.worstAbsDeviation<0.01?'rgba(245,158,11,0.3)':'rgba(139,92,246,0.3)'}`,
+                          padding:'2px 10px',borderRadius:4,fontSize:11,fontWeight:600,
+                          background:match.worstAbsDeviation<0.001?'rgba(34,197,94,0.12)':match.worstAbsDeviation<0.01?'rgba(245,158,11,0.12)':'rgba(139,92,246,0.12)',
+                          color:match.worstAbsDeviation<0.001?'var(--success)':match.worstAbsDeviation<0.01?'var(--accent)':'var(--highlight)',
+                          border:`1px solid ${match.worstAbsDeviation<0.001?'rgba(34,197,94,0.3)':match.worstAbsDeviation<0.01?'rgba(245,158,11,0.3)':'rgba(139,92,246,0.3)'}`,
                         }}>{match.worstAbsDeviation<0.0001?'Exact fit':`Worst oversize: +${match.worstAbsDeviation.toFixed(4)}"`}</span>
-                        <span style={{ fontSize:18, color:'var(--muted)', userSelect:'none' }}>{isExpanded?'▾':'▸'}</span>
+                        <span style={{fontSize:18,color:'var(--muted)',userSelect:'none'}}>{isExpanded?'▾':'▸'}</span>
                       </div>
                     </div>
 
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginTop:10 }}>
-                      {uniformBelts ? (<>
+                      {uniformBelts?(<>
                         <Stat label="Belt Width" value={`${match.edgeBW.toFixed(3)}"`} />
                         <Stat label="Pulley Face" value={`${match.edgePF.toFixed(3)}"`} />
-                      </>) : (<>
+                      </>):(<>
                         <Stat label="Edge Belt" value={`${match.edgeBW.toFixed(3)}"`} />
                         <Stat label="Edge Pulley Face" value={`${match.edgePF.toFixed(3)}"`} />
                         <Stat label="Inner Belt" value={`${match.innerBW.toFixed(3)}"`} />
@@ -338,47 +292,45 @@
                       <Stat label="Belt Counts" value={match.assignment.map(a=>a.totalBelts).join(', ')} />
                     </div>
 
-                    {isExpanded && (
-                      <div style={{ marginTop:14 }} onClick={e=>e.stopPropagation()}>
-                        <div style={{ overflowX:'auto' }}>
-                          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, fontFamily:"'IBM Plex Mono', monospace" }}>
-                            <thead><tr style={{ borderBottom:'1px solid var(--border)' }}>
-                              {['Nominal','Belts','Inner','Actual Frame Width','Oversize'].map(h=>
-                                <th key={h} style={{ padding:'6px 8px', textAlign:'left', fontSize:10, fontWeight:600, textTransform:'uppercase', letterSpacing:0.5, color:'var(--muted)', whiteSpace:'nowrap' }}>{h}</th>
-                              )}
+                    {isExpanded&&(
+                      <div style={{marginTop:14}} onClick={e=>e.stopPropagation()}>
+                        <div style={{overflowX:'auto'}}>
+                          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,fontFamily:"'IBM Plex Mono', monospace"}}>
+                            <thead><tr style={{borderBottom:'1px solid var(--border)'}}>
+                              {['Nominal','Belts','Plates','Actual Frame Width','Oversize'].map(h=>
+                                <th key={h} style={{padding:'6px 8px',textAlign:'left',fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:0.5,color:'var(--muted)',whiteSpace:'nowrap'}}>{h}</th>)}
                             </tr></thead>
                             <tbody>{match.assignment.map((a,ai)=>
-                              <tr key={ai} style={{ borderBottom:'1px solid var(--border)' }}>
-                                <td style={{ padding:'6px 8px', fontWeight:600, color:'var(--accent)' }}>{a.conveyorWidth}"</td>
-                                <td style={{ padding:'6px 8px' }}>{a.totalBelts}</td>
-                                <td style={{ padding:'6px 8px' }}>{a.innerCount}</td>
-                                <td style={{ padding:'6px 8px', fontWeight:600, color:'var(--text)' }}>{a.frameWidth.toFixed(4)}"</td>
-                                <td style={{ padding:'6px 8px' }}><DeviationBadge deviation={a.deviation} /></td>
+                              <tr key={ai} style={{borderBottom:'1px solid var(--border)'}}>
+                                <td style={{padding:'6px 8px',fontWeight:600,color:'var(--accent)'}}>{a.conveyorWidth}"</td>
+                                <td style={{padding:'6px 8px'}}>{a.totalBelts}</td>
+                                <td style={{padding:'6px 8px'}}>{a.totalBelts-1}</td>
+                                <td style={{padding:'6px 8px',fontWeight:600,color:'var(--text)'}}>{a.frameWidth.toFixed(4)}"</td>
+                                <td style={{padding:'6px 8px'}}><DeviationBadge deviation={a.deviation} /></td>
                               </tr>
                             )}</tbody>
                           </table>
                         </div>
 
-                        <div style={{ marginTop:14 }}>
-                          <div style={{ fontSize:10, fontWeight:600, textTransform:'uppercase', letterSpacing:0.5, color:'var(--muted)', marginBottom:8 }}>
-                            Cross-sections — blue = edge, amber = inner, purple = bearing boss, gray plate = divider
+                        <div style={{marginTop:14}}>
+                          <div style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:0.5,color:'var(--muted)',marginBottom:8}}>
+                            Cross-sections — blue = edge, amber = inner, purple = edge boss, gray = inner spacing (plate)
                           </div>
                           {match.assignment.map((a,ai)=>
-                            <div key={ai} style={{ marginBottom:4 }}>
-                              <div style={{ fontSize:10, color:'var(--muted)', textAlign:'center', marginBottom:-2 }}>
+                            <div key={ai} style={{marginBottom:4}}>
+                              <div style={{fontSize:10,color:'var(--muted)',textAlign:'center',marginBottom:-2}}>
                                 Nominal {a.conveyorWidth}" → Actual {a.frameWidth.toFixed(4)}" (+{a.deviation.toFixed(4)}") — {a.totalBelts} belts
                               </div>
                               <ConveyorDiagram edgePF={match.edgePF} innerPF={match.innerPF}
                                 innerCount={a.innerCount} frameWidth={a.frameWidth}
-                                pulleyDiff={pulleyDiff} bossLen={bossLength} plateThick={plateThickness} />
+                                pulleyDiff={pulleyDiff} bossLen={bossLength} innerSpacing={innerSpacing} />
                             </div>
                           )}
                         </div>
 
-                        <div style={{ marginTop:10, padding:10, background:'var(--surface2)', borderRadius:6, fontSize:11, color:'var(--muted)', lineHeight:1.5 }}>
-                          <strong style={{ color:'var(--text)' }}>Rigid stack-up:</strong> Frame width = 2×{bossLength}" boss + 2×{match.edgePF.toFixed(3)}" edgePF + N×{match.innerPF.toFixed(3)}" innerPF + (N+1)×{innerGap.toFixed(3)}" gap.
-                          Nothing flexes. The "Oversize" column shows how much wider the actual frame is than nominal.
-                          Frame is never smaller than nominal — only equal or wider.
+                        <div style={{marginTop:10,padding:10,background:'var(--surface2)',borderRadius:6,fontSize:11,color:'var(--muted)',lineHeight:1.5}}>
+                          <strong style={{color:'var(--text)'}}>Rigid stack-up:</strong> Frame = 2×{bossLength}" edge boss + 2×{match.edgePF.toFixed(3)}" edgePF + N×{match.innerPF.toFixed(3)}" innerPF + (N+1)×{innerSpacing}" inner spacing.
+                          Nothing flexes. Frame is never smaller than nominal — only equal or wider.
                         </div>
                       </div>
                     )}
